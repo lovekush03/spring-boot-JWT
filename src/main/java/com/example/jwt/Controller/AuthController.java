@@ -1,5 +1,7 @@
 package com.example.jwt.Controller;
 
+import com.example.jwt.Dto.AuthResponseDTO;
+import com.example.jwt.Dto.RefreshTokenRequestDTO;
 import com.example.jwt.Entity.User;
 import com.example.jwt.Repository.UserRepository;
 import com.example.jwt.Service.AuthService;
@@ -32,8 +34,17 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody User user) {
+    public ResponseEntity<AuthResponseDTO> login(@RequestBody User user){
         return authService.authenticateUser(user);
     }
 
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponseDTO> refresh(@RequestBody RefreshTokenRequestDTO refreshTokenRequest){
+        return authService.refreshToken(refreshTokenRequest);
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<String> logout(@RequestBody RefreshTokenRequestDTO refreshTokenRequest){
+        return authService.logout(refreshTokenRequest);
+    }
 }

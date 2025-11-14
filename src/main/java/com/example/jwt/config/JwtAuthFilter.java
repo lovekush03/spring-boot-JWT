@@ -1,7 +1,10 @@
 package com.example.jwt.config;
 
+import com.example.jwt.CustomExceptions.RefreshTokenExpiredException;
 import com.example.jwt.Repository.UserRepository;
 import com.example.jwt.Service.JwtService;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.security.SignatureException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,6 +18,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 
 @Component
 @RequiredArgsConstructor
@@ -34,18 +38,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        token = authHeader.substring(7);
-        username = jwtService.extractUsername(token);
-        //Use of the second condition in the if condition
-        // to prevent spring security from authenticating an already authenticated user
-        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails user = userRepository.findByUsername(username)
-                    .map(u -> org.springframework.security.core.userdetails.User
-                            .withUsername(u.getUsername())
-                            .password(u.getPassword())
-                            .roles(u.getRole())
-                            .build())
-                    .orElse(null);
+        try{
+            token = authHeader.substring(7);
+            username = jwtService.extractUsername(token);
+            //Use of the second condition in the if condition
+            // to prevent spring security from authenticating an already authenticated user
+            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                UserDetails user = userRepository.findByUsername(username)
+                        .map(u -> org.springframework.security.core.userdetails.User
+                                .withUsername(u.getUsername())
+                                .password(u.getPassword())
+                                .roles(u.getRole())
+                                .build())
+                        .orElse(null);
             /*
                 UsernamePasswordAuthenticationToken is implementation of Authentication in Spring Security
                 We create it using user(who is authenticated), null(we don't need credentials when we already have token), role(roles/permission)
@@ -55,14 +60,39 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 After this, any controller method or security check (like @PreAuthorize("hasRole('ADMIN')"))
                 will work because the framework knows who the user is.
              */
-            if (user != null && jwtService.validateToken(token)) {
-                UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+                if (user != null && jwtService.validateToken(token)) {
+                    UsernamePasswordAuthenticationToken authToken =
+                            new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                }
             }
+        }
+        catch(ExpiredJwtException exp){
+            writeErrorResponse(response, exp.getMessage(), 400);
+            return;
+        }
+        catch (SignatureException exp){
+            writeErrorResponse(response, exp.getMessage(), 400);
+            return;
+        }catch (RefreshTokenExpiredException exp){
+            writeErrorResponse(response, exp.getMessage(), 400);
+            return;
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void writeErrorResponse(HttpServletResponse response, String message, int status) throws IOException {
+        response.setStatus(status);
+        response.setContentType("application/json");
+        String json = """
+                {
+                    "errorMessage":%s,
+                    "errorOccurred":%s,
+                    "statusCode":%s
+                }
+                """.formatted(message, LocalDateTime.now(), status);
+        response.getWriter().write(json);
     }
 }
