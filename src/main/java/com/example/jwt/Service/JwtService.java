@@ -12,8 +12,11 @@ import java.util.Date;
 
 @Service
 public class JwtService {
-    @Value(value = "${JWT_SECRET}")
+    @Value(value = "${jwt.secret}")
     private String SECRET; // should be at least 256-bit
+
+    @Value(value = "${jwt.accessToken.expiry}")
+    private Long accessTokenExpiry;
 
     private Key getSignKey() {
         return Keys.hmacShaKeyFor(SECRET.getBytes());
@@ -23,7 +26,7 @@ public class JwtService {
         return Jwts.builder()
                 .setSubject(username)
                 .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 30)) // 30 min
+                .setExpiration(new Date(System.currentTimeMillis() + accessTokenExpiry))
                 .signWith(getSignKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
